@@ -17,7 +17,7 @@ Before changing behaviour, check the existing hooks, in this order:
 2. **A new role or playbook** that runs before or after the upstream ones through `import_playbook`.
 3. **Overriding an upstream role's defaults** from inventory.
 
-If none of these can do it, stop and ask the user. Don't patch an upstream file on your own initiative. If the user agrees to a change, keep it small, and list it under "Upstream deviations" at the end of this file.
+If none of these can do it, stop and ask the user. Don't patch an upstream file on your own initiative. If the user agrees to a change, keep it small and generic enough to offer upstream, and list it under "Upstream deviations" at the end of this file.
 
 To check that the rule held, run `git diff --stat upstream/main...HEAD --diff-filter=MD`. It should list only entries from "Upstream deviations".
 
@@ -137,7 +137,7 @@ git merge upstream/main   # merge, don't rebase: main is published
 
 After a sync, re-read the "Behaviour of the upstream code" section against what changed.
 
-Syncing is one-way: this fork pulls from upstream and nothing goes back. All commits, branches and PRs go to `jrhoward/k3s-ansible`. Never open PRs or issues on `k3s-io/k3s-ansible`, and never push to the `upstream` remote.
+By default this fork only pulls from upstream. All commits, branches and PRs go to `jrhoward/k3s-ansible`. The user may contribute back later, but don't open PRs or issues on `k3s-io/k3s-ansible`, or push to the `upstream` remote, without their explicit instruction.
 
 Pass the repo explicitly when opening a PR, because `gh` can default to the parent repo: `gh pr create --repo jrhoward/k3s-ansible`.
 
