@@ -1,0 +1,15 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argocd
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argo-cd
+  version: {{ addon_argocd_version }}
+  targetNamespace: argocd
+  createNamespace: true
+{% if addon_argocd_values_file | length > 0 %}
+  valuesContent: |-
+    {{ lookup('ansible.builtin.file', addon_argocd_values_file) | indent(4) }}
+{% endif %}

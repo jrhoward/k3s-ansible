@@ -25,6 +25,12 @@ k3s_cluster:
     # addon_longhorn_enabled: true
     # addon_longhorn_version: 1.13.0
 
+    # Argo CD. Both files are read from the control node, so they can live in your GitOps repo.
+    # addon_argocd_enabled: true
+    # addon_argocd_version: 10.11.6
+    # addon_argocd_values_file: /path/to/argocd/values.yaml
+    # addon_argocd_root_app_file: /path/to/root-application.yaml
+
     server_config_yaml: |
       flannel-backend: none
       disable-network-policy: true

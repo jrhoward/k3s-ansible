@@ -1,0 +1,43 @@
+---
+- name: Install Argo CD
+  when:
+    - not ansible_check_mode
+    - inventory_hostname in groups[server_group]
+  ansible.builtin.template:
+    src: addon-argocd.yaml.j2
+    dest: "{{ addon_argocd_manifests_dir }}/addon-argocd.yaml"
+    mode: "0600"
+
+- name: Wait for Argo CD
+  when: not ansible_check_mode
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    cmd: k3s kubectl -n argocd wait --for=condition=Available --timeout=10s deployment --all
+  register: addon_argocd_ready
+  until: addon_argocd_ready.rc == 0
+  retries: 60
+  delay: 10
+  changed_when: false
+
+- name: Wait for the Argo CD application controller
+  when: not ansible_check_mode
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    cmd: k3s kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=10s
+  register: addon_argocd_controller
+  until: addon_argocd_controller.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Install the root Application
+  when:
+    - not ansible_check_mode
+    - addon_argocd_root_app_file | length > 0
+    - inventory_hostname in groups[server_group]
+  ansible.builtin.copy:
+    src: "{{ addon_argocd_root_app_file }}"
+    dest: "{{ addon_argocd_manifests_dir }}/addon-argocd-root.yaml"
+    mode: "0600"

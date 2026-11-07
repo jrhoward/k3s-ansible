@@ -23,7 +23,7 @@ To check that the rule held, run `git diff --stat upstream/main...HEAD --diff-fi
 
 ## Layout for fork code
 
-`roles/addon_argocd`, the workflow and any later add-ons don't exist yet. Create them as needed, using these names:
+The workflow and any later add-ons don't exist yet. Create them as needed, using these names:
 
 ```text
 roles/addon_calico/             # one role per add-on: defaults/, tasks/, templates/, README.md
@@ -101,8 +101,9 @@ Prefer K3s's own deploy controller: template a `HelmChart` CR or plain manifest 
 ## Argo CD
 
 - **Ordering:** run it after Calico, in `addons.yml`, so pods have a network.
-- **Install:** use the `argo-cd` chart through a `HelmChart`, with `targetNamespace: argocd` and `createNamespace: true`.
-- **Root app:** wait for CRD `applications.argoproj.io` to be `Established` before applying the root `Application`.
+- **Install:** use the `argo-cd` chart through a `HelmChart`, with `targetNamespace: argocd` and `createNamespace: true`. Its release fits Helm's limit, so its CRDs stay in the chart.
+- **Versions:** the chart version isn't the Argo CD version: chart `10.11.6` is v3.5.6. Avoid brand-new minor releases for a bootstrap tool.
+- **Root app and values:** these come from files on the control node (`addon_argocd_root_app_file`, `addon_argocd_values_file`), so the GitOps repo stays the one source. Don't template them in this repo. The root app is manual on purpose, because most child apps auto-sync, so a root sync starts everything in `apps/installed/`. Apply it after Argo CD is `Available`, which also means its CRDs exist.
 - **Ownership boundary:** Ansible owns the nodes, K3s, Calico, Argo CD and one root `Application`. Argo CD owns everything else. Don't add workloads to this repo, and don't have Argo CD manage what the `HelmChart` CRs manage.
 - **Secrets:** repo credentials come from ansible-vault variables, are written as `argocd.argoproj.io/secret-type: repository` Secrets, and any task handling them uses `no_log: true`. Never commit plaintext.
 - **Ingress:** if Argo CD will manage ingress or the load balancer, disable Traefik or ServiceLB with `disable:` in `server_config_yaml`.

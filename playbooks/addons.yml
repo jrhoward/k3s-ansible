@@ -8,3 +8,5 @@
       when: addon_calico_enabled
     - role: addon_longhorn
       when: addon_longhorn_enabled
+    - role: addon_argocd
+      when: addon_argocd_enabled
