@@ -5,5 +5,8 @@ addon_argocd_version: 10.11.6
 # Local paths on the control node. Leave empty to use chart defaults, and to install with nothing to sync.
 addon_argocd_values_file: ""
 addon_argocd_root_app_file: ""
+# Private Git repo access. Set both, and keep the key out of Git.
+addon_argocd_repo_url: ""
+addon_argocd_repo_ssh_key: ""
 # Upstream defaults aren't visible outside their own roles, so this mirrors them.
 server_group: server  # noqa var-naming[no-role-prefix]

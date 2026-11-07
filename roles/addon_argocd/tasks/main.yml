@@ -32,6 +32,20 @@
   delay: 10
   changed_when: false
 
+# Over stdin, so the key doesn't land in the manifests directory.
+- name: Register the private Git repo
+  when:
+    - not ansible_check_mode
+    - addon_argocd_repo_url | length > 0
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  no_log: true
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f -
+    stdin: "{{ lookup('ansible.builtin.template', 'addon-argocd-repo.yaml.j2') }}"
+  register: addon_argocd_repo
+  changed_when: "'unchanged' not in addon_argocd_repo.stdout"
+
 - name: Install the root Application
   when:
     - not ansible_check_mode

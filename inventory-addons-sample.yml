@@ -30,6 +30,8 @@ k3s_cluster:
     # addon_argocd_version: 10.11.6
     # addon_argocd_values_file: /path/to/argocd/values.yaml
     # addon_argocd_root_app_file: /path/to/root-application.yaml
+    # addon_argocd_repo_url: git@github.com:example/gitops.git
+    # addon_argocd_repo_ssh_key: "{{ lookup('ansible.builtin.file', '~/.ssh/argocd_ed25519') }}"
 
     server_config_yaml: |
       flannel-backend: none

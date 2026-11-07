@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: root-repo
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+data:
+  type: {{ 'git' | b64encode }}
+  url: {{ addon_argocd_repo_url | b64encode }}
+  sshPrivateKey: {{ (addon_argocd_repo_ssh_key ~ '\n') | b64encode }}
