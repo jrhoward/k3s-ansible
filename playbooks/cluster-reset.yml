@@ -1,0 +1,14 @@
+---
+- name: Reset K3s
+  ansible.builtin.import_playbook: reset.yml
+
+- name: Clean up add-ons
+  hosts: k3s_cluster
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Clean up Calico
+      when: addon_calico_enabled | default(false)
+      ansible.builtin.include_role:
+        name: addon_calico
+        tasks_from: reset

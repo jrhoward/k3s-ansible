@@ -1,0 +1,150 @@
+---
+# K3s can't change CNI on a running cluster, and the server role has already
+# run by now, so a wrong inventory has to stop here.
+- name: Check that the server config suits Calico
+  run_once: true
+  ansible.builtin.assert:
+    that:
+      - addon_calico_server_config['flannel-backend'] | default('') == 'none'
+      - addon_calico_server_config['disable-network-policy'] | default(false) | bool
+      # ponytail: single-stack IPv4 only, add a pool per CIDR and V6 autodetection for dual-stack
+      - "',' not in addon_calico_cluster_cidr"
+      # ponytail: no IPIP, the ufw module can't open IP protocol 4
+      - addon_calico_encapsulation in ['VXLAN', 'VXLANCrossSubnet', 'None']
+      # The operator's v3 CRD mode needs MutatingAdmissionPolicy, which is off by default before 1.36.
+      - addon_calico_k8s_version is version('1.36', '>=')
+    fail_msg: >-
+      server_config_yaml must set "flannel-backend: none" and "disable-network-policy: true",
+      cluster-cidr must be a single IPv4 CIDR, and addon_calico_encapsulation must be
+      VXLAN, VXLANCrossSubnet or None. Changing the first two on an existing cluster
+      needs a reset and rebuild. k3s_version must be v1.36 or later.
+
+- name: Populate service facts
+  ansible.builtin.service_facts:
+
+- name: Open Calico ports in ufw
+  when:
+    - manage_firewall
+    - ansible_facts.services['ufw.service'] is defined or ansible_facts.services['ufw'] is defined
+  block:
+    - name: Get ufw status
+      ansible.builtin.command:
+        cmd: ufw status
+      changed_when: false
+      register: addon_calico_ufw_status
+
+    - name: If ufw enabled, open Calico ports
+      when:
+        - "'Status: active' in addon_calico_ufw_status['stdout']"
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.split('/')[0] }}"
+        proto: "{{ item.split('/')[1] }}"
+      loop: "{{ addon_calico_firewall_ports }}"
+
+- name: If firewalld enabled, open Calico ports
+  when:
+    - manage_firewall
+    - ansible_facts.services['firewalld.service'] is defined
+    - ansible_facts.services['firewalld.service'].state == 'running'
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    zone: internal
+    state: enabled
+    permanent: true
+    immediate: true
+  loop: "{{ addon_calico_firewall_ports }}"
+
+- name: Stop NetworkManager from managing Calico interfaces
+  when:
+    - ansible_facts.services['NetworkManager.service'] is defined
+    - ansible_facts.services['NetworkManager.service'].state == 'running'
+  ansible.builtin.template:
+    src: calico-networkmanager.conf.j2
+    dest: /etc/NetworkManager/conf.d/calico.conf
+    mode: "0644"
+  notify: Reload NetworkManager
+
+- name: Apply the NetworkManager change before Calico creates interfaces
+  ansible.builtin.meta: flush_handlers
+
+# The operator runs as container_t and reads /var/lib/calico/mtu. With K3s's --selinux,
+# the default label denies that, and Calico stays Degraded.
+- name: Let confined containers read /var/lib/calico
+  when: ansible_facts['selinux']['status'] == 'enabled'
+  block:
+    - name: Set the SELinux file context for /var/lib/calico
+      community.general.sefcontext:
+        target: '/var/lib/calico(/.*)?'
+        setype: container_file_t
+
+    - name: Create /var/lib/calico with that context
+      ansible.builtin.file:
+        path: /var/lib/calico
+        state: directory
+        mode: u=rwX,go=rX
+        setype: container_file_t
+        recurse: true
+
+# Not a HelmChart: the CRD charts' releases are over Helm's 1 MiB Secret limit.
+- name: Install Calico CRDs
+  when:
+    - not ansible_check_mode
+    - inventory_hostname in groups[server_group]
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/projectcalico/calico/{{ addon_calico_version }}/manifests/v3_projectcalico_org.yaml"
+    dest: "{{ addon_calico_manifests_dir }}/addon-calico-crds.yaml"
+    force: true
+    timeout: 120
+    mode: "0600"
+
+# The operator chart creates an Installation, so its CRD has to exist first.
+- name: Wait for Calico CRDs
+  when: not ansible_check_mode
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    cmd: k3s kubectl wait --for=condition=Established --timeout=10s crd/installations.operator.tigera.io
+  register: addon_calico_crds
+  until: addon_calico_crds.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Install Calico
+  when:
+    - not ansible_check_mode
+    - inventory_hostname in groups[server_group]
+  ansible.builtin.template:
+    src: addon-calico.yaml.j2
+    dest: "{{ addon_calico_manifests_dir }}/addon-calico.yaml"
+    mode: "0600"
+
+- name: Wait for every node to be Ready
+  when: not ansible_check_mode
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl --request-timeout=10s get nodes
+      -o=jsonpath='{range .items[*]}{.metadata.name}={.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
+  register: addon_calico_nodes
+  until:
+    - addon_calico_nodes.rc == 0
+    - (addon_calico_nodes.stdout.split() | length) >= (groups['k3s_cluster'] | length)
+    - (addon_calico_nodes.stdout.split() | reject('search', '=True$') | list | length) == 0
+  retries: 60
+  delay: 10
+  changed_when: false
+
+- name: Wait for Calico to report Available
+  when: not ansible_check_mode
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    cmd: k3s kubectl wait --for=condition=Available --timeout=10s tigerastatus/calico
+  register: addon_calico_status
+  until: addon_calico_status.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false

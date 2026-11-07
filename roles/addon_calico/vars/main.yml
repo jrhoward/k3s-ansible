@@ -1,0 +1,12 @@
+---
+addon_calico_server_config: "{{ server_config_yaml | default('{}') | from_yaml }}"
+addon_calico_cluster_cidr: "{{ addon_calico_server_config['cluster-cidr'] | default('10.42.0.0/16') }}"
+addon_calico_bgp: "{{ (addon_calico_encapsulation == 'VXLAN') | ternary('Disabled', 'Enabled') }}"
+addon_calico_firewall_ports: >-
+  {{
+    ['5473/tcp']
+    + ((addon_calico_bgp == 'Enabled') | ternary(['179/tcp'], []))
+    + (('VXLAN' in addon_calico_encapsulation) | ternary(['4789/udp'], []))
+  }}
+addon_calico_manifests_dir: /var/lib/rancher/k3s/server/manifests
+addon_calico_k8s_version: "{{ k3s_version | regex_replace('^v', '') }}"

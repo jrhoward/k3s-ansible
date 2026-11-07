@@ -23,14 +23,14 @@ To check that the rule held, run `git diff --stat upstream/main...HEAD --diff-fi
 
 ## Layout for fork code
 
-None of this exists yet. Create it as needed, using these names:
+`roles/addon_argocd`, the workflow and any later add-ons don't exist yet. Create them as needed, using these names:
 
 ```text
 roles/addon_calico/             # one role per add-on: defaults/, tasks/, templates/, README.md
 roles/addon_argocd/
 playbooks/addons.yml            # add-ons only, for an existing cluster
 playbooks/cluster.yml           # import_playbook site.yml, then addons.yml
-playbooks/cluster-reset.yml     # add-on host cleanup plus import_playbook reset.yml
+playbooks/cluster-reset.yml     # import_playbook reset.yml, then add-on host cleanup
 inventory-addons-sample.yml     # sample vars, since inventory-sample.yml is upstream's
 tests/addons.yml                # inventory for a new workflow
 .github/workflows/addons.yml    # a new workflow; don't edit integration.yml
@@ -74,10 +74,15 @@ Prefer K3s's own deploy controller: template a `HelmChart` CR or plain manifest 
   ```
 
 - **CIDR:** the Calico IP pool must equal `cluster-cidr`. Calico's own default is `192.168.0.0/16` and K3s's is `10.42.0.0/16`. Derive the pool from `server_config_yaml` rather than setting it twice. `prereq` already reads `cluster-cidr` from there for its firewall rules.
-- **Install:** use the `tigera-operator` chart through a `HelmChart` with `spec.bootstrap: true`. Without it the install job can't schedule, because no CNI exists yet.
+- **Install:** since v3.32 the `tigera-operator` chart doesn't ship CRDs, so they go in first, and the role waits for `installations.operator.tigera.io` to be `Established`. Use the `projectcalico.org.v3` CRDs, as Calico's K3s and Helm docs do, from the release's `manifests/v3_projectcalico_org.yaml`. Don't install them as a `HelmChart`: the release is over Helm's 1 MiB Secret limit. The operator is a `HelmChart` with `spec.bootstrap: true`, because its install job has to run before a CNI exists.
+- **Versions:** the role needs K3s v1.36 or later. The operator crashes in v3 CRD mode without `MutatingAdmissionPolicy`, which Kubernetes 1.34 and 1.35 leave off by default, even though Calico's docs list a manifest for them. `inventory-sample.yml` pins an older K3s, so don't copy its `k3s_version`.
 - **IP forwarding:** K3s requires it in the CNI config. With the operator, set `calicoNetwork.containerIPForwarding: Enabled`.
-- **Encapsulation:** set it explicitly on the IP pool rather than relying on the default.
-- **Firewall:** `prereq` opens only Flannel's ports. When `manage_firewall` is true and ufw or firewalld is active, `addon_calico` must open what the chosen mode needs: `179/tcp` for BGP, `4789/udp` for VXLAN, IP protocol 4 for IP-in-IP, and `5473/tcp` for Typha. Follow the ufw and firewalld blocks in `roles/prereq/tasks/main.yml`.
+- **Encapsulation:** set it explicitly on the IP pool rather than relying on the default. BGP is off for `VXLAN` and on for everything else.
+- **Firewall:** `prereq` opens only Flannel's ports. When `manage_firewall` is true and ufw or firewalld is active, `addon_calico` must open what the chosen mode needs: `179/tcp` for BGP, `4789/udp` for VXLAN, and `5473/tcp` for Typha. IP-in-IP isn't supported, because the ufw module can't open IP protocol 4. Follow the ufw and firewalld blocks in `roles/prereq/tasks/main.yml`.
+- **CNI paths:** leave them at Calico's defaults, `/etc/cni/net.d` and `/opt/cni/bin`. A previous working K3s and Calico cluster on these nodes used them, so don't set `cni.binDir` or `cni.confDir`.
+- **MTU:** leave it on auto-detect. That cluster got `1450` on a 1500 NIC with VXLAN.
+- **Stale CNI config:** these files survive `reset.yml`. A leftover `10-calico.conflist` can make a node report `Ready` before Calico runs, so `Ready` alone doesn't prove Calico is up, which is why the role also waits for `tigerastatus/calico`. The file can also chain plugins from the old cluster, such as `istio-cni`.
+- **SELinux:** with K3s's `--selinux`, the operator runs as `container_t` and can't read `/var/lib/calico/mtu` unless it's labelled `container_file_t`. Calico then stays `Degraded` while every pod looks healthy. No denial is logged, so check `tigerastatus`, not `ausearch`.
 - **NetworkManager:** on hosts that run it, configure it to ignore `cali*` and `vxlan.calico` interfaces.
 - **Finish:** wait for all nodes to be `Ready` before the role ends. Everything after it depends on that.
 - **Reset:** `reset.yml` doesn't know about Calico. `cluster-reset.yml` must also clear `/etc/cni/net.d/*calico*`, `/var/lib/calico`, and Calico's interfaces and iptables rules.
@@ -121,7 +126,7 @@ ansible-playbook playbooks/addons.yml -i inventory.yml    # add-ons only
 
 `inventory.yml` is gitignored, so it can hold real hosts. Vault-encrypt any secrets in it anyway.
 
-`tests/*.yml` are inventories for CI's privileged Docker nodes, not unit tests. Don't assume Calico works there. Prove that in the new workflow, or test on VMs. For Vagrant, use a separate file through `VAGRANT_VAGRANTFILE` instead of editing `Vagrantfile`, whose `extra_vars` are hardcoded.
+`tests/*.yml` are inventories for CI's privileged Docker nodes, not unit tests. They can check install order and role logic for Calico, if you run `mount --make-rshared /` in each container first, but not real networking: test that on real nodes. For Vagrant, use a separate file through `VAGRANT_VAGRANTFILE` instead of editing `Vagrantfile`, whose `extra_vars` are hardcoded.
 
 Don't run playbooks against a real inventory without being asked, especially `reset.yml` or `cluster-reset.yml`, which destroy the cluster.
 

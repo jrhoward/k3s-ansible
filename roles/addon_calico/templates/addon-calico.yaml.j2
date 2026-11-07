@@ -1,0 +1,27 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: tigera-operator
+  namespace: kube-system
+spec:
+  repo: https://docs.tigera.io/calico/charts
+  chart: tigera-operator
+  version: {{ addon_calico_version }}
+  targetNamespace: tigera-operator
+  createNamespace: true
+  # The install job has to run before any CNI exists.
+  bootstrap: true
+  valuesContent: |-
+    installation:
+      cni:
+        type: Calico
+      calicoNetwork:
+        bgp: {{ addon_calico_bgp }}
+        containerIPForwarding: Enabled
+        nodeAddressAutodetectionV4:
+          kubernetes: NodeInternalIP
+        ipPools:
+          - cidr: {{ addon_calico_cluster_cidr }}
+            encapsulation: {{ addon_calico_encapsulation }}
+            natOutgoing: Enabled
+            nodeSelector: all()

@@ -1,0 +1,48 @@
+---
+- name: Remove Calico host state
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/cni/net.d/10-calico.conflist
+    - /etc/cni/net.d/calico-kubeconfig
+    - /etc/NetworkManager/conf.d/calico.conf
+    - /opt/cni/bin/calico
+    - /opt/cni/bin/calico-ipam
+    - /opt/cni/bin/flannel
+    - /opt/cni/bin/host-local
+    - /opt/cni/bin/loopback
+    - /opt/cni/bin/portmap
+    - /opt/cni/bin/tuning
+    - /var/lib/calico
+    - /var/log/calico
+
+- name: Remove Calico interfaces
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      for dev in $(ip -o link show | awk -F': ' '{print $2}' | cut -d@ -f1 | grep -E '^(cali|vxlan\.calico|vxlan-v6\.calico)'); do
+        ip link delete "$dev"
+        echo "deleted $dev"
+      done
+    executable: /bin/bash
+  register: addon_calico_links
+  changed_when: addon_calico_links.stdout | length > 0
+  failed_when: false
+
+# Same approach as k3s-killall.sh, which only knows about Flannel's rules.
+- name: Remove Calico iptables rules
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      for ipt in iptables ip6tables; do
+        command -v "$ipt-save" >/dev/null || continue
+        rules=$("$ipt-save")
+        if grep -qi cali <<<"$rules"; then
+          grep -iv cali <<<"$rules" | "$ipt-restore"
+          echo "cleaned $ipt"
+        fi
+      done
+    executable: /bin/bash
+  register: addon_calico_rules
+  changed_when: addon_calico_rules.stdout | length > 0

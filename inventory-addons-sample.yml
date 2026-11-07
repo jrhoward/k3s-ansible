@@ -1,0 +1,27 @@
+---
+k3s_cluster:
+  children:
+    server:
+      hosts:
+        192.16.35.11:
+    agent:
+      hosts:
+        192.16.35.12:
+        192.16.35.13:
+
+  vars:
+    ansible_port: 22
+    ansible_user: debian
+    k3s_version: v1.36.6+k3s1
+    # Generate with "openssl rand -base64 64", and keep it in ansible-vault.
+    token: "changeme!"
+    api_endpoint: "{{ hostvars[groups['server'][0]]['ansible_host'] | default(groups['server'][0]) }}"
+
+    # Calico. The server config is required, and can't be changed on a running cluster.
+    addon_calico_enabled: true
+    # addon_calico_version: v3.33.0
+    # addon_calico_encapsulation: VXLAN
+    server_config_yaml: |
+      flannel-backend: none
+      disable-network-policy: true
+      cluster-cidr: 10.42.0.0/16

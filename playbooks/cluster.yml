@@ -1,0 +1,6 @@
+---
+- name: Setup K3s
+  ansible.builtin.import_playbook: site.yml
+
+- name: Install add-ons
+  ansible.builtin.import_playbook: addons.yml

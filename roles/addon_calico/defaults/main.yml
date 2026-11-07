@@ -1,0 +1,10 @@
+---
+addon_calico_enabled: false
+# Calico v3.33 is tested on Kubernetes 1.35 to 1.37. Check the Calico
+# requirements page against k3s_version before changing either.
+addon_calico_version: v3.33.0
+# One of VXLAN, VXLANCrossSubnet or None. The last two need BGP between nodes.
+addon_calico_encapsulation: VXLAN
+# Upstream defaults aren't visible outside their own roles, so these mirror them.
+manage_firewall: true  # noqa var-naming[no-role-prefix]
+server_group: server  # noqa var-naming[no-role-prefix]
