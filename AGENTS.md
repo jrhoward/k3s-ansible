@@ -56,6 +56,9 @@ Prefer K3s's own deploy controller: template a `HelmChart` CR or plain manifest 
 
 ## Behaviour of the upstream code to design around
 
+- **Admin access is already part of the install.** On a new cluster, `site.yml` merges a `system:admin` kubeconfig into `~/.kube/config` on the control node as context `k3s-ansible`, and makes it current. Don't build a role for this. Set `kubeconfig` for test clusters, or they overwrite the context in the user's real config.
+- **`--tags kubeconfig` doesn't refresh it,** despite the README: the tasks that fetch and merge aren't tagged. On an existing cluster, merge `/etc/rancher/k3s/k3s.yaml` by hand.
+- **`~/.kube/config.new` stays behind with mode `0644`.** It holds the admin key, so `cluster.yml` deletes it. A plain `site.yml` run doesn't.
 - **`site.yml` restarts every K3s server on each run.** Iterate on add-ons with `addons.yml`, not `cluster.yml`.
 - **`k3s_server_serial`:** on HA clusters pass `-e k3s_server_serial=1`. It is a play keyword, so inventory values are ignored.
 - **`site.yml` finishes with nodes `NotReady` when there's no CNI.** Its checks look at node listing and `EtcdIsVoter`, never `Ready`, so add-on roles must do their own waiting.

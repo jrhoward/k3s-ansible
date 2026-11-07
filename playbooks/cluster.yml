@@ -4,3 +4,18 @@
 
 - name: Install add-ons
   ansible.builtin.import_playbook: addons.yml
+
+# site.yml leaves this behind with mode 0644, and it holds the admin key.
+- name: Remove the leftover kubeconfig from the control node
+  hosts: server
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Remove ~/.kube/config.new
+      when: kubeconfig is not defined
+      run_once: true
+      delegate_to: 127.0.0.1
+      tags: kubeconfig
+      ansible.builtin.file:
+        path: ~/.kube/config.new
+        state: absent
