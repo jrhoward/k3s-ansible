@@ -1,0 +1,52 @@
+---
+- name: Check that the cluster suits Longhorn
+  ansible.builtin.assert:
+    that:
+      - addon_longhorn_k8s_version is version('1.34', '>=')
+      - ansible_facts['architecture'] not in ['armv6l', 'armv7l']
+      - ansible_facts['os_family'] in addon_longhorn_packages
+    fail_msg: >-
+      Longhorn needs k3s_version v1.34 or later and doesn't support ARM32.
+      Supported OS families are {{ addon_longhorn_packages.keys() | join(', ') }}.
+
+- name: Install Longhorn host packages
+  ansible.builtin.package:
+    name: "{{ addon_longhorn_packages[ansible_facts['os_family']] }}"
+    state: present
+
+- name: Load Longhorn kernel modules
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+    persistent: present
+  loop:
+    - iscsi_tcp
+    - dm_crypt
+
+- name: Enable and start iscsid
+  ansible.builtin.service:
+    name: iscsid
+    state: started
+    enabled: true
+
+- name: Install Longhorn
+  when:
+    - not ansible_check_mode
+    - inventory_hostname in groups[server_group]
+  ansible.builtin.template:
+    src: addon-longhorn.yaml.j2
+    dest: "{{ addon_longhorn_manifests_dir }}/addon-longhorn.yaml"
+    mode: "0600"
+
+# longhorn-driver-deployer creates this last, so it being ready means the CSI driver is usable.
+- name: Wait for the Longhorn CSI plugin
+  when: not ansible_check_mode
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    cmd: k3s kubectl -n longhorn-system rollout status daemonset/longhorn-csi-plugin --timeout=10s
+  register: addon_longhorn_csi
+  until: addon_longhorn_csi.rc == 0
+  retries: 60
+  delay: 10
+  changed_when: false

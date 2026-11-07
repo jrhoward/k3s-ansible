@@ -6,3 +6,5 @@
   roles:
     - role: addon_calico
       when: addon_calico_enabled
+    - role: addon_longhorn
+      when: addon_longhorn_enabled

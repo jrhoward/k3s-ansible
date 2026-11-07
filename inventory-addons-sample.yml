@@ -21,6 +21,10 @@ k3s_cluster:
     addon_calico_enabled: true
     # addon_calico_version: v3.33.0
     # addon_calico_encapsulation: VXLAN
+    # Longhorn. Installs iSCSI and NFS client packages on every node.
+    # addon_longhorn_enabled: true
+    # addon_longhorn_version: 1.13.0
+
     server_config_yaml: |
       flannel-backend: none
       disable-network-policy: true

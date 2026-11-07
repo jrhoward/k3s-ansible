@@ -1,0 +1,5 @@
+---
+- name: Remove Longhorn data
+  ansible.builtin.file:
+    path: /var/lib/longhorn
+    state: absent

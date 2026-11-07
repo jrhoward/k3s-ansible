@@ -27,6 +27,7 @@ To check that the rule held, run `git diff --stat upstream/main...HEAD --diff-fi
 
 ```text
 roles/addon_calico/             # one role per add-on: defaults/, tasks/, templates/, README.md
+roles/addon_longhorn/
 roles/addon_argocd/
 playbooks/addons.yml            # add-ons only, for an existing cluster
 playbooks/cluster.yml           # import_playbook site.yml, then addons.yml
@@ -86,6 +87,13 @@ Prefer K3s's own deploy controller: template a `HelmChart` CR or plain manifest 
 - **NetworkManager:** on hosts that run it, configure it to ignore `cali*` and `vxlan.calico` interfaces.
 - **Finish:** wait for all nodes to be `Ready` before the role ends. Everything after it depends on that.
 - **Reset:** `reset.yml` doesn't know about Calico. `cluster-reset.yml` must also clear `/etc/cni/net.d/*calico*`, `/var/lib/calico`, and Calico's interfaces and iptables rules.
+
+## Longhorn
+
+- **Install:** a `HelmChart` with the chart's defaults, after the CNI, in `addons.yml`. The one exception is `persistence.defaultClass: false`: Longhorn is a special case for distributed storage, so `local-path` stays the default class. The K3s docs pin an old `longhorn.yaml`, so check the version against `k3s_version` rather than copying theirs.
+- **Hosts:** every node needs `iscsid` running with `iscsi_tcp` loaded. On Fedora, starting `iscsid` also generates `/etc/iscsi/initiatorname.iscsi`.
+- **Testing:** a `Bound` PVC or a running pod doesn't prove the data path. Write data, then compare checksums after moving the pod and after a replica rebuild, and treat an empty checksum as a failure.
+- **SELinux:** Fedora 44 with `--selinux` needed no workaround. Only add the `iscsid_t` `dac_override` policy from Longhorn's KB if the denial actually appears.
 
 ## Argo CD
 

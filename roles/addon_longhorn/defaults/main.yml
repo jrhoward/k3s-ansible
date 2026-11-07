@@ -1,0 +1,6 @@
+---
+addon_longhorn_enabled: false
+# Longhorn 1.13 needs Kubernetes 1.34 or later.
+addon_longhorn_version: 1.13.0
+# Upstream defaults aren't visible outside their own roles, so this mirrors them.
+server_group: server  # noqa var-naming[no-role-prefix]

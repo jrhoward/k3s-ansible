@@ -1,0 +1,8 @@
+---
+addon_longhorn_k8s_version: "{{ k3s_version | regex_replace('^v', '') }}"
+addon_longhorn_manifests_dir: /var/lib/rancher/k3s/server/manifests
+addon_longhorn_packages:
+  Archlinux: [open-iscsi, nfs-utils, cryptsetup, device-mapper]
+  Debian: [open-iscsi, nfs-common, cryptsetup, dmsetup]
+  RedHat: [iscsi-initiator-utils, nfs-utils, cryptsetup, device-mapper]
+  Suse: [open-iscsi, nfs-client, cryptsetup, device-mapper]

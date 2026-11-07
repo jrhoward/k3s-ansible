@@ -12,3 +12,9 @@
       ansible.builtin.include_role:
         name: addon_calico
         tasks_from: reset
+
+    - name: Clean up Longhorn
+      when: addon_longhorn_enabled | default(false)
+      ansible.builtin.include_role:
+        name: addon_longhorn
+        tasks_from: reset
