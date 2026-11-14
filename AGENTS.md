@@ -29,6 +29,7 @@ The workflow and any later add-ons don't exist yet. Create them as needed, using
 roles/addon_calico/             # one role per add-on: defaults/, tasks/, templates/, README.md
 roles/addon_longhorn/
 roles/addon_argocd/
+roles/addon_nvidia/             # host driver and toolkit, per host, not a HelmChart
 playbooks/addons.yml            # add-ons only, for an existing cluster
 playbooks/cluster.yml           # import_playbook site.yml, then addons.yml
 playbooks/cluster-reset.yml     # import_playbook reset.yml, then add-on host cleanup
@@ -107,6 +108,15 @@ Prefer K3s's own deploy controller: template a `HelmChart` CR or plain manifest 
 - **Ownership boundary:** Ansible owns the nodes, K3s, Calico, Argo CD and one root `Application`. Argo CD owns everything else. Don't add workloads to this repo, and don't have Argo CD manage what the `HelmChart` CRs manage.
 - **Secrets:** repo credentials come from a local key file or ansible-vault, never from a committed file. They're written as an `argocd.argoproj.io/secret-type: repository` Secret over stdin, so they don't land in the manifests directory, and any task handling them uses `no_log: true`.
 - **Ingress:** if Argo CD will manage ingress or the load balancer, disable Traefik or ServiceLB with `disable:` in `server_config_yaml`.
+
+## NVIDIA
+
+- **Scope:** `addon_nvidia` is a host role, enabled per host on GPU nodes. It runs in its own `serial: 1` play at the end of `addons.yml`, so nodes reboot one at a time. The GPU Operator and device plugin belong to Argo CD, with the operator's driver and toolkit turned off.
+- **Unpinned on purpose:** the user wants the whole host upgraded on each run, so the role runs `dnf upgrade '*'` and reboots for a new driver or kernel. Don't add versionlock or pins.
+- **Partial kernels:** `akmod-nvidia` pulls `kernel-devel-matched` for the newest kernel, which brings only `kernel-core` and `kernel-modules-core`. grubby makes that kernel the default, and it boots without `kernel-modules`, which holds most NIC drivers. node-3 came up with no network. The full upgrade installs the `kernel` package, which fixes it. Upgrading only `kernel` by name isn't enough, because `kernel-devel` stays behind and `akmods` fails.
+- **Branches:** Maxwell, Pascal and Volta GPUs need `addon_nvidia_driver_branch: 580xx`, and CUDA 12 images.
+- **Runtime:** K3s adds the `nvidia` runtime to containerd when it finds `nvidia-container-runtime` at startup, and ships the `nvidia` RuntimeClass. Don't run `nvidia-ctk runtime configure`.
+- **SELinux:** a GPU pod ran under enforcing with `--selinux` and no boolean or policy change.
 
 ## Conventions
 

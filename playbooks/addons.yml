@@ -10,3 +10,13 @@
       when: addon_longhorn_enabled
     - role: addon_argocd
       when: addon_argocd_enabled
+
+# A play of its own so GPU nodes reboot one at a time.
+- name: Install NVIDIA drivers
+  hosts: k3s_cluster
+  gather_facts: true
+  become: true
+  serial: 1
+  roles:
+    - role: addon_nvidia
+      when: addon_nvidia_enabled

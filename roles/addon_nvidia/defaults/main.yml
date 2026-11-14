@@ -1,0 +1,7 @@
+---
+addon_nvidia_enabled: false
+# RPM Fusion driver branch. Empty for the current driver, or a legacy branch
+# such as "580xx", the last one that supports Maxwell, Pascal and Volta GPUs.
+addon_nvidia_driver_branch: ""
+# Upstream defaults aren't visible outside their own roles, so this mirrors them.
+server_group: server  # noqa var-naming[no-role-prefix]

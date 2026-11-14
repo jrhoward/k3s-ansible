@@ -33,6 +33,10 @@ k3s_cluster:
     # addon_argocd_repo_url: git@github.com:example/gitops.git
     # addon_argocd_repo_ssh_key: "{{ lookup('ansible.builtin.file', '~/.ssh/argocd_ed25519') }}"
 
+    # NVIDIA host driver and container toolkit. Set per host, on the GPU nodes:
+    #   addon_nvidia_enabled: true
+    #   addon_nvidia_driver_branch: 580xx  # Maxwell, Pascal and Volta GPUs
+
     server_config_yaml: |
       flannel-backend: none
       disable-network-policy: true

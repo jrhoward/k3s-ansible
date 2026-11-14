@@ -1,0 +1,11 @@
+---
+addon_nvidia_suffix: "{{ '-' ~ addon_nvidia_driver_branch if addon_nvidia_driver_branch else '' }}"
+addon_nvidia_driver_packages:
+  - akmod-nvidia{{ addon_nvidia_suffix }}
+  - xorg-x11-drv-nvidia{{ addon_nvidia_suffix }}-cuda
+addon_nvidia_rpmfusion_releases:
+  - https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-{{ ansible_facts['distribution_major_version'] }}.noarch.rpm
+  - https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-{{ ansible_facts['distribution_major_version'] }}.noarch.rpm
+addon_nvidia_toolkit_repo: https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo
+addon_nvidia_k3s_service: "{{ 'k3s' if inventory_hostname in groups[server_group] else 'k3s-agent' }}"
+addon_nvidia_containerd_config: /var/lib/rancher/k3s/agent/etc/containerd/config.toml

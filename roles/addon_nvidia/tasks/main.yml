@@ -1,0 +1,121 @@
+---
+- name: Look for an NVIDIA GPU
+  ansible.builtin.shell:
+    cmd: grep -lx 0x10de /sys/bus/pci/devices/*/vendor
+  register: addon_nvidia_gpus
+  changed_when: false
+  failed_when: addon_nvidia_gpus.rc not in [0, 1]
+  check_mode: false
+
+# akmods builds unsigned modules, which Secure Boot won't load.
+- name: Read the Secure Boot state
+  ansible.builtin.command:
+    cmd: od -An -tu1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+  register: addon_nvidia_secure_boot
+  changed_when: false
+  # The variable doesn't exist on BIOS hosts, which have no Secure Boot.
+  failed_when: false
+  check_mode: false
+
+- name: Check that the host suits the NVIDIA role
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Fedora'
+      - addon_nvidia_gpus.rc == 0
+      - addon_nvidia_secure_boot.stdout.split()[-1:] != ['1']
+    fail_msg: >-
+      addon_nvidia needs Fedora (it installs RPM Fusion drivers), an NVIDIA GPU,
+      and Secure Boot off.
+
+# The release packages carry the RPM Fusion signing keys, so they can't be checked against them first.
+- name: Add the RPM Fusion repositories
+  ansible.builtin.dnf:
+    name: "{{ addon_nvidia_rpmfusion_releases }}"
+    state: present
+    disable_gpg_check: true
+  register: addon_nvidia_rpmfusion
+
+- name: Add the NVIDIA container toolkit repository
+  ansible.builtin.get_url:
+    url: "{{ addon_nvidia_toolkit_repo }}"
+    dest: /etc/yum.repos.d/nvidia-container-toolkit.repo
+    mode: "0644"
+  register: addon_nvidia_toolkit_repo_file
+
+- name: Install the NVIDIA driver and container toolkit
+  # In check mode a repository that isn't added yet has no packages to find.
+  when: not (ansible_check_mode and (addon_nvidia_rpmfusion is changed or addon_nvidia_toolkit_repo_file is changed))
+  ansible.builtin.dnf:
+    name: "{{ addon_nvidia_driver_packages + ['nvidia-container-toolkit'] }}"
+    state: present
+  register: addon_nvidia_install
+
+# Deliberately unpinned. akmod-nvidia pulls in only kernel-core for the newest kernel, which
+# leaves it without most modules, network drivers included. A full upgrade brings the rest
+# of that kernel, and kernel-devel with it, so akmods can build for it.
+- name: Upgrade every package
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest  # noqa package-latest
+  register: addon_nvidia_upgrade
+
+- name: Build the NVIDIA kernel module for the default boot kernel
+  when: not ansible_check_mode
+  ansible.builtin.shell:
+    cmd: kernel=$(grubby --default-kernel) && akmods --kernels "${kernel#/boot/vmlinuz-}"
+  register: addon_nvidia_akmods
+  changed_when: "'Building' in addon_nvidia_akmods.stdout"
+
+- name: Compare the installed and running driver and kernel
+  ansible.builtin.shell:  # noqa command-instead-of-module
+    cmd: |
+      rpm -q --qf '%{VERSION}\n' xorg-x11-drv-nvidia{{ addon_nvidia_suffix }}
+      cat /sys/module/nvidia/version 2>/dev/null || echo none
+      grubby --default-kernel
+      echo /boot/vmlinuz-$(uname -r)
+  register: addon_nvidia_versions
+  changed_when: false
+  check_mode: false
+
+# Also covers the first install, where nouveau holds the GPU until a reboot.
+- name: Reboot into the new NVIDIA driver or kernel
+  when:
+    - not ansible_check_mode
+    - addon_nvidia_versions.stdout_lines[0] != addon_nvidia_versions.stdout_lines[1]
+      or addon_nvidia_versions.stdout_lines[2] != addon_nvidia_versions.stdout_lines[3]
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+  register: addon_nvidia_reboot
+
+# K3s adds the nvidia runtime to its containerd config when it finds the toolkit at startup.
+- name: Restart K3s to pick up the NVIDIA runtime
+  when:
+    - addon_nvidia_install is changed or addon_nvidia_upgrade is changed
+    - addon_nvidia_reboot is skipped
+  ansible.builtin.service:
+    name: "{{ addon_nvidia_k3s_service }}"
+    state: restarted
+
+- name: Wait for the NVIDIA runtime in containerd's config
+  when: not ansible_check_mode
+  ansible.builtin.wait_for:
+    path: "{{ addon_nvidia_containerd_config }}"
+    search_regex: nvidia-container-runtime
+    timeout: 180
+
+- name: Check that the driver sees the GPU
+  when: not ansible_check_mode
+  ansible.builtin.command:
+    cmd: nvidia-smi -L
+  changed_when: false
+
+- name: Wait for the node to be Ready
+  when: not ansible_check_mode
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    cmd: k3s kubectl wait --for=condition=Ready node/{{ ansible_facts['hostname'] }} --timeout=10s
+  register: addon_nvidia_ready
+  until: addon_nvidia_ready.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
