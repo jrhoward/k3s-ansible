@@ -8,12 +8,27 @@
     dest: "{{ addon_argocd_manifests_dir }}/addon-argocd.yaml"
     mode: "0600"
 
+# On an upgrade the old release stays Available until K3s's Helm job applies the new chart.
+# ponytail: tracks the chart version only, so a values-only change isn't waited for.
+- name: Wait for the Argo CD chart version to be applied
+  when: not ansible_check_mode
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    # Quoted, or the command module's shell-style splitting drops the backslash.
+    cmd: k3s kubectl -n argocd get deployment argocd-server -o 'jsonpath={.metadata.labels.helm\.sh/chart}'
+  register: addon_argocd_chart
+  until: addon_argocd_chart.stdout == 'argo-cd-' ~ addon_argocd_version
+  retries: 60
+  delay: 10
+  changed_when: false
+
 - name: Wait for Argo CD
   when: not ansible_check_mode
   run_once: true
   delegate_to: "{{ groups[server_group][0] }}"
   ansible.builtin.command:
-    cmd: k3s kubectl -n argocd wait --for=condition=Available --timeout=10s deployment --all
+    cmd: k3s kubectl -n argocd rollout status deployment -l app.kubernetes.io/part-of=argocd --timeout=10s
   register: addon_argocd_ready
   until: addon_argocd_ready.rc == 0
   retries: 60
