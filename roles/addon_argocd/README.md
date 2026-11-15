@@ -21,7 +21,7 @@ It needs a working CNI, and runs after `addon_calico` in `playbooks/addons.yml`.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `addon_argocd_enabled` | `false` | Turns the role on. |
-| `addon_argocd_version` | `10.11.6` | Chart version, which is Argo CD v3.5.6. |
+| `addon_argocd_version` | `10.18.0` | Chart version, which is Argo CD v3.6.1. |
 | `addon_argocd_values_file` | `""` | Helm values file on the control node. Leave empty for chart defaults. |
 | `addon_argocd_root_app_file` | `""` | Root `Application` manifest on the control node, applied unchanged. Leave empty to install with nothing to sync. |
 | `addon_argocd_repo_url` | `""` | SSH URL of a private Git repo. |

@@ -103,7 +103,7 @@ Prefer K3s's own deploy controller: template a `HelmChart` CR or plain manifest 
 
 - **Ordering:** run it after Calico, in `addons.yml`, so pods have a network.
 - **Install:** use the `argo-cd` chart through a `HelmChart`, with `targetNamespace: argocd` and `createNamespace: true`. Its release fits Helm's limit, so its CRDs stay in the chart.
-- **Versions:** the chart version isn't the Argo CD version: chart `10.11.6` is v3.5.6. Avoid brand-new minor releases for a bootstrap tool.
+- **Versions:** the chart version isn't the Argo CD version: chart `10.18.0` is v3.6.1. Avoid brand-new minor releases for a bootstrap tool.
 - **Root app and values:** these come from files on the control node (`addon_argocd_root_app_file`, `addon_argocd_values_file`), so the GitOps repo stays the one source. Don't template them in this repo. The root app is manual on purpose, because most child apps auto-sync, so a root sync starts everything in `apps/installed/`. Apply it after Argo CD is `Available`, which also means its CRDs exist.
 - **Ownership boundary:** Ansible owns the nodes, K3s, Calico, Argo CD and one root `Application`. Argo CD owns everything else. Don't add workloads to this repo, and don't have Argo CD manage what the `HelmChart` CRs manage.
 - **Secrets:** repo credentials come from a local key file or ansible-vault, never from a committed file. They're written as an `argocd.argoproj.io/secret-type: repository` Secret over stdin, so they don't land in the manifests directory, and any task handling them uses `no_log: true`.
