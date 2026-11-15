@@ -1,0 +1,8 @@
+# Managed by Ansible (addon_gvisor).
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runsc]
+  runtime_type = "io.containerd.runsc.v1"
+  runtime_path = "/usr/local/bin/containerd-shim-runsc-v1"
+
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runsc.options]
+  TypeUrl = "io.containerd.runsc.v1.options"
+  ConfigPath = "{{ addon_gvisor_containerd_dir }}/runsc.toml"

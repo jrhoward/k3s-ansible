@@ -1,0 +1,6 @@
+---
+addon_gvisor_release_url: https://github.com/google/gvisor/releases/download/release-{{ addon_gvisor_version }}
+addon_gvisor_tarball: gvisor-{{ ansible_facts['architecture'] }}.tar.bz2
+addon_gvisor_k3s_service: "{{ 'k3s' if inventory_hostname in groups[server_group] else 'k3s-agent' }}"
+addon_gvisor_containerd_dir: /var/lib/rancher/k3s/agent/etc/containerd
+addon_gvisor_manifests_dir: /var/lib/rancher/k3s/server/manifests

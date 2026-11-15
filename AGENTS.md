@@ -30,6 +30,7 @@ roles/addon_calico/             # one role per add-on: defaults/, tasks/, templa
 roles/addon_longhorn/
 roles/addon_argocd/
 roles/addon_nvidia/             # host driver and toolkit, per host, not a HelmChart
+roles/addon_gvisor/             # runsc runtime per host, plus the gvisor RuntimeClass
 playbooks/addons.yml            # add-ons only, for an existing cluster
 playbooks/cluster.yml           # import_playbook site.yml, then addons.yml
 playbooks/cluster-reset.yml     # import_playbook reset.yml, then add-on host cleanup
@@ -117,6 +118,14 @@ Prefer K3s's own deploy controller: template a `HelmChart` CR or plain manifest 
 - **Branches:** Maxwell, Pascal and Volta GPUs need `addon_nvidia_driver_branch: 580xx`, and CUDA 12 images.
 - **Runtime:** K3s adds the `nvidia` runtime to containerd when it finds `nvidia-container-runtime` at startup, and ships the `nvidia` RuntimeClass. Don't run `nvidia-ctk runtime configure`.
 - **SELinux:** a GPU pod ran under enforcing with `--selinux` and no boolean or policy change.
+
+## gVisor
+
+- **Install:** gVisor isn't packaged for Fedora, so `addon_gvisor` downloads the release tarball, checks it against the release's `SHA256SUMS`, and installs `runsc` and `containerd-shim-runsc-v1` to `/usr/local/bin`.
+- **Runtime:** K3s doesn't detect `runsc` the way it detects `nvidia` or `crun`, but its containerd config imports `config-v3.toml.d/*.toml`. The role adds a drop-in there rather than overriding `config.toml.tmpl`, then restarts K3s. It runs in its own `serial: 1` play.
+- **Cgroups:** K3s's kubelet uses the systemd cgroup driver, so `runsc.toml` sets `systemd-cgroup`.
+- **SELinux:** `runsc` rejects any spec with a process SELinux label, and K3s's `--selinux` gives every container one. There's no flag to allow it (google/gvisor#511). The shim calls `runsc-strip-selinux` through `binary_name` in `runsc.toml`, which removes `selinuxLabel` from the spec and then runs `runsc`. Sandbox processes therefore run as `container_runtime_t`, not `container_t`. The user chose this over Kata or turning off `--selinux`, so SELinux still confines every other pod. Don't remove the wrapper while K3s runs with `--selinux`.
+- **Install path:** the tarball also has `gvisor-bin/`, which `runsc` runs its sentry from, so unpack all of it. The shim matches Fedora's `/usr/local/bin/containerd.*` rule and is labelled `container_runtime_exec_t`. Tested with no AVC denials.
 
 ## Conventions
 

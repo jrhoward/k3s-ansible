@@ -1,0 +1,64 @@
+---
+- name: Download gVisor
+  ansible.builtin.get_url:
+    url: "{{ addon_gvisor_release_url }}/{{ addon_gvisor_tarball }}"
+    dest: /usr/local/src/gvisor-{{ addon_gvisor_version }}-{{ addon_gvisor_tarball }}
+    checksum: sha256:{{ addon_gvisor_release_url }}/SHA256SUMS
+    mode: "0644"
+  register: addon_gvisor_download
+
+# The tarball holds runsc, its containerd shim, and the gvisor-bin/ helpers runsc runs.
+- name: Install gVisor
+  when: not (ansible_check_mode and addon_gvisor_download is changed)
+  ansible.builtin.unarchive:
+    src: "{{ addon_gvisor_download.dest }}"
+    dest: /usr/local/bin
+    remote_src: true
+  register: addon_gvisor_install
+
+- name: Install the wrapper that strips SELinux labels for runsc
+  ansible.builtin.copy:
+    src: runsc-strip-selinux
+    dest: /usr/local/bin/runsc-strip-selinux
+    mode: "0755"
+
+- name: Create K3s's containerd drop-in directory
+  ansible.builtin.file:
+    path: "{{ addon_gvisor_containerd_dir }}/config-v3.toml.d"
+    state: directory
+    mode: "0700"
+
+- name: Configure the runsc runtime
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ addon_gvisor_containerd_dir }}/{{ item.dest }}"
+    mode: "0600"
+  loop:
+    - { src: runsc.toml.j2, dest: runsc.toml }
+    - { src: gvisor.toml.j2, dest: config-v3.toml.d/gvisor.toml }
+  register: addon_gvisor_config
+
+- name: Restart K3s to pick up the runsc runtime
+  when: addon_gvisor_install is changed or addon_gvisor_config is changed
+  ansible.builtin.service:
+    name: "{{ addon_gvisor_k3s_service }}"
+    state: restarted
+
+- name: Wait for the node to be Ready
+  when: not ansible_check_mode
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    cmd: k3s kubectl wait --for=condition=Ready node/{{ ansible_facts['hostname'] }} --timeout=10s
+  register: addon_gvisor_ready
+  until: addon_gvisor_ready.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Install the gvisor RuntimeClass
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.template:
+    src: addon-gvisor.yaml.j2
+    dest: "{{ addon_gvisor_manifests_dir }}/addon-gvisor.yaml"
+    mode: "0600"

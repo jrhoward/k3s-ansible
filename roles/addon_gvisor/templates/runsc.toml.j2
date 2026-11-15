@@ -1,0 +1,6 @@
+# Managed by Ansible (addon_gvisor).
+binary_name = "/usr/local/bin/runsc-strip-selinux"
+
+[runsc_config]
+  # K3s runs the kubelet with the systemd cgroup driver.
+  systemd-cgroup = "true"

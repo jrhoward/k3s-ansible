@@ -1,0 +1,23 @@
+#!/bin/sh
+# Managed by Ansible (addon_gvisor).
+# runsc rejects any spec with an SELinux process label, and K3s's --selinux gives
+# every container one. Drop it from the bundle and exec specs, then run runsc.
+# The field is never first in a process spec, so removing it with its leading comma
+# leaves valid JSON.
+prev=
+for arg in "$@"; do
+  case $prev in
+    --bundle | -bundle) spec=$arg/config.json ;;
+    --process | -process) spec=$arg ;;
+  esac
+  case $arg in
+    --bundle=* | -bundle=*) spec=${arg#*=}/config.json ;;
+    --process=* | -process=*) spec=${arg#*=} ;;
+  esac
+  if [ -n "$spec" ] && [ -f "$spec" ]; then
+    sed -i 's/,"selinuxLabel":"[^"]*"//' "$spec"
+  fi
+  spec=
+  prev=$arg
+done
+exec /usr/local/bin/runsc "$@"
