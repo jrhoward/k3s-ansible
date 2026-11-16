@@ -5,6 +5,8 @@ addon_calico_enabled: false
 addon_calico_version: v3.33.0
 # One of VXLAN, VXLANCrossSubnet or None. The last two need BGP between nodes.
 addon_calico_encapsulation: VXLAN
+# Merged into the spec of FelixConfiguration "default", e.g. logPrefix. Empty changes nothing.
+addon_calico_felix_config: {}
 # Upstream defaults aren't visible outside their own roles, so these mirror them.
 manage_firewall: true  # noqa var-naming[no-role-prefix]
 server_group: server  # noqa var-naming[no-role-prefix]

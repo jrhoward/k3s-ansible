@@ -148,3 +148,22 @@
   retries: 30
   delay: 10
   changed_when: false
+
+# The chart's defaultFelixConfiguration is deprecated, so the role patches the one Calico creates.
+- name: Apply Felix settings
+  when:
+    - not ansible_check_mode
+    - addon_calico_felix_config | length > 0
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    argv:
+      - k3s
+      - kubectl
+      - patch
+      - felixconfiguration
+      - default
+      - --type=merge
+      - "--patch={{ {'spec': addon_calico_felix_config} | to_json }}"
+  register: addon_calico_felix
+  changed_when: "'no change' not in addon_calico_felix.stdout"

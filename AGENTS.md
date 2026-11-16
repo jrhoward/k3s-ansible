@@ -91,6 +91,7 @@ Prefer K3s's own deploy controller: template a `HelmChart` CR or plain manifest 
 - **SELinux:** with K3s's `--selinux`, the operator runs as `container_t` and can't read `/var/lib/calico/mtu` unless it's labelled `container_file_t`. Calico then stays `Degraded` while every pod looks healthy. No denial is logged, so check `tigerastatus`, not `ausearch`.
 - **NetworkManager:** on hosts that run it, configure it to ignore `cali*` and `vxlan.calico` interfaces.
 - **Finish:** wait for all nodes to be `Ready` before the role ends. Everything after it depends on that.
+- **Felix settings:** set them in `addon_calico_felix_config`, which the role merges into FelixConfiguration `default` after Calico is up. The chart's `defaultFelixConfiguration` is deprecated. The lab repo's `baseline-deny` `Log` rules rely on `logPrefix` and `logActionRateLimit`.
 - **Reset:** `reset.yml` doesn't know about Calico. `cluster-reset.yml` must also clear `/etc/cni/net.d/*calico*`, `/var/lib/calico`, and Calico's interfaces and iptables rules.
 
 ## Longhorn

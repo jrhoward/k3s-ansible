@@ -28,6 +28,7 @@ The role stops with an error if the server config doesn't match. `site.yml` on i
 | `addon_calico_enabled` | `false` | Turns the role on. |
 | `addon_calico_version` | `v3.33.0` | Used for the CRDs and the chart. v3.33 is tested on Kubernetes 1.35 to 1.37, so check it against `k3s_version`. |
 | `addon_calico_encapsulation` | `VXLAN` | `VXLAN`, `VXLANCrossSubnet` or `None`. BGP is on for the last two. |
+| `addon_calico_felix_config` | `{}` | Merged into the spec of FelixConfiguration `default` after Calico is up, such as `logPrefix` and `logActionRateLimit` for `Log` rules. Felix applies it without a restart. |
 
 The IP pool is taken from `cluster-cidr` in `server_config_yaml`.
 
