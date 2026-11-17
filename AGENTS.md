@@ -120,6 +120,7 @@ Prefer K3s's own deploy controller: template a `HelmChart` CR or plain manifest 
 - **Runtime:** K3s adds the `nvidia` runtime to containerd when it finds `nvidia-container-runtime` at startup, and ships the `nvidia` RuntimeClass. Don't run `nvidia-ctk runtime configure`.
 - **SELinux:** a GPU pod ran under enforcing with `--selinux` and no boolean or policy change.
 - **Falco false positive:** at GPU-pod start `nvidia-ctk` runs `ldconfig` through runc's memfd self-clone (its CVE-2019-5736 hardening), which trips Falco's Critical "Fileless execution via memfd_create" rule on every restart. The lab repo's Falco values (`values/falco/values.yaml`, `memfd.yaml`) scope an exception to that exact `proc.exepath` (`memfd:runc_cloned:ldconfig`) and parent (`nvidia-ctk`), so other memfd execs still alert. It's benign, not an escape.
+- **Falco false positive (dnf):** Fedora's `dnf5 makecache` timer truncates its own rotated log `/var/log/dnf5.log*` on the host, tripping Falco's "Clear Log Activities" rule. The lab repo's Falco values (`values/falco/values.yaml`, `clearlog.yaml`) append only `dnf5` clearing its own log to the `allowed_clear_log_files` macro, so any other log truncation still alerts. Host maintenance, not tampering.
 
 ## gVisor
 
