@@ -1,0 +1,112 @@
+---
+- name: Check the host is x86_64
+  ansible.builtin.assert:
+    that: ansible_facts['architecture'] == 'x86_64'
+    fail_msg: addon_kata installs the amd64 release only.
+
+- name: Load the KVM module
+  ansible.builtin.command:
+    cmd: modprobe {{ addon_kata_kvm_module }}
+  register: addon_kata_modprobe
+  failed_when: false
+  changed_when: false
+
+- name: Check /dev/kvm exists
+  ansible.builtin.stat:
+    path: /dev/kvm
+  register: addon_kata_kvm
+
+- name: Fail without KVM
+  ansible.builtin.assert:
+    that: addon_kata_kvm.stat.ischr | default(false)
+    fail_msg: >-
+      /dev/kvm is missing ({{ addon_kata_kvm_module }}: {{ addon_kata_modprobe.stderr | default('') | trim }}).
+      Enable VT-x or AMD-V (SVM) in the BIOS.
+
+- name: Read the installed Kata version
+  ansible.builtin.slurp:
+    src: "{{ addon_kata_version_file }}"
+  register: addon_kata_installed
+  failed_when: false
+
+- name: Install Kata
+  when: (addon_kata_installed.content | default('') | b64decode | trim) != addon_kata_version
+  block:
+    - name: Download the Kata release
+      ansible.builtin.get_url:
+        url: "{{ addon_kata_url }}"
+        dest: /usr/local/src/{{ addon_kata_tarball }}
+        checksum: sha256:{{ addon_kata_sha256 }}
+        mode: "0644"
+        timeout: 600
+
+    - name: Remove the previous Kata release
+      ansible.builtin.file:
+        path: "{{ addon_kata_dir }}"
+        state: absent
+
+    # The tarball holds ./opt/kata/.
+    - name: Unpack the Kata release
+      when: not ansible_check_mode
+      ansible.builtin.unarchive:
+        src: /usr/local/src/{{ addon_kata_tarball }}
+        dest: /
+        remote_src: true
+
+    - name: Record the installed Kata version
+      ansible.builtin.copy:
+        content: "{{ addon_kata_version }}\n"
+        dest: "{{ addon_kata_version_file }}"
+        mode: "0644"
+      register: addon_kata_install
+
+    - name: Remove the downloaded release
+      ansible.builtin.file:
+        path: /usr/local/src/{{ addon_kata_tarball }}
+        state: absent
+
+- name: Create K3s's containerd drop-in directory
+  ansible.builtin.file:
+    path: "{{ addon_kata_containerd_dir }}/config-v3.toml.d"
+    state: directory
+    mode: "0700"
+
+- name: Configure the kata runtime
+  ansible.builtin.template:
+    src: kata.toml.j2
+    dest: "{{ addon_kata_containerd_dir }}/config-v3.toml.d/kata.toml"
+    mode: "0600"
+  register: addon_kata_config
+
+- name: Restart K3s to pick up the kata runtime
+  when: addon_kata_install is changed or addon_kata_config is changed
+  ansible.builtin.service:
+    name: "{{ addon_kata_k3s_service }}"
+    state: restarted
+
+- name: Wait for the node to be Ready
+  when: not ansible_check_mode
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    cmd: k3s kubectl wait --for=condition=Ready node/{{ ansible_facts['hostname'] }} --timeout=10s
+  register: addon_kata_ready
+  until: addon_kata_ready.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Label the node for the kata RuntimeClass
+  when: not ansible_check_mode
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.command:
+    cmd: k3s kubectl label node {{ ansible_facts['hostname'] }} {{ addon_kata_node_label }}=true --overwrite
+  register: addon_kata_label
+  changed_when: "'not labeled' not in addon_kata_label.stdout"
+
+- name: Install the kata RuntimeClass
+  run_once: true
+  delegate_to: "{{ groups[server_group][0] }}"
+  ansible.builtin.template:
+    src: addon-kata.yaml.j2
+    dest: "{{ addon_kata_manifests_dir }}/addon-kata.yaml"
+    mode: "0600"

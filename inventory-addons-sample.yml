@@ -43,6 +43,10 @@ k3s_cluster:
     # addon_gvisor_enabled: true
     # addon_gvisor_version: 20261102.0
 
+    # Kata Containers, as the kata runtime and the kata RuntimeClass. Each pod runs in
+    # its own lightweight VM, so the host needs KVM (VT-x or AMD-V on in the BIOS).
+    # addon_kata_enabled: true
+
     # NVIDIA host driver and container toolkit. Set per host, on the GPU nodes:
     #   addon_nvidia_enabled: true
     #   addon_nvidia_driver_branch: 580xx  # Maxwell, Pascal and Volta GPUs

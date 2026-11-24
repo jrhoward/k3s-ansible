@@ -12,7 +12,7 @@
       when: addon_argocd_enabled
 
 # One host at a time, since each restarts K3s.
-- name: Install gVisor
+- name: Install sandbox runtimes
   hosts: k3s_cluster
   gather_facts: true
   become: true
@@ -20,6 +20,8 @@
   roles:
     - role: addon_gvisor
       when: addon_gvisor_enabled
+    - role: addon_kata
+      when: addon_kata_enabled
 
 # A play of its own so GPU nodes reboot one at a time.
 - name: Install NVIDIA drivers

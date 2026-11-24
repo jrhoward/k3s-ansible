@@ -1,0 +1,10 @@
+---
+addon_kata_tarball: kata-static-{{ addon_kata_version }}-amd64.tar.zst
+addon_kata_url: https://github.com/kata-containers/kata-containers/releases/download/{{ addon_kata_version }}/{{ addon_kata_tarball }}
+addon_kata_dir: /opt/kata
+addon_kata_version_file: "{{ addon_kata_dir }}/.addon-kata-version"
+addon_kata_k3s_service: "{{ 'k3s' if inventory_hostname in groups[server_group] else 'k3s-agent' }}"
+addon_kata_containerd_dir: /var/lib/rancher/k3s/agent/etc/containerd
+addon_kata_manifests_dir: /var/lib/rancher/k3s/server/manifests
+addon_kata_kvm_module: "{{ 'kvm_amd' if 'AMD' in (ansible_facts['processor'] | join(' ')) else 'kvm_intel' }}"
+addon_kata_node_label: katacontainers.io/kata-runtime
