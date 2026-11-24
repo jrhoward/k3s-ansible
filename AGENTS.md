@@ -31,6 +31,7 @@ roles/addon_longhorn/
 roles/addon_argocd/
 roles/addon_nvidia/             # host driver and toolkit, per host, not a HelmChart
 roles/addon_gvisor/             # runsc runtime per host, plus the gvisor RuntimeClass
+roles/addon_kata/               # Kata runtime per host (upstream release), plus the kata RuntimeClass
 playbooks/addons.yml            # add-ons only, for an existing cluster
 playbooks/cluster.yml           # import_playbook site.yml, then addons.yml
 playbooks/cluster-reset.yml     # import_playbook reset.yml, then add-on host cleanup
@@ -131,6 +132,15 @@ Prefer K3s's own deploy controller: template a `HelmChart` CR or plain manifest 
 - **No custom SELinux policy:** confining `runsc` with a policy module of its own is out of scope, because the user won't maintain one. A `container_runtime_t` process can read `/etc/shadow` and write to `/root`, so gVisor's own isolation is the only barrier for these pods. Keep pods that need SELinux confinement on runc.
 - **No Falco inside sandboxes:** Falco dropped its gVisor engine in 0.44, so nothing can read gVisor's own syscall stream (`pod-init-config`), and this role doesn't set one up. Falco's eBPF driver still sees the sentry and gofer as host processes, so an escape shows up once it makes host syscalls, but activity that stays inside a sandbox doesn't. gVisor's systrap ptraces on every sandbox start, so the lab repo's Falco values allow ptrace from `gvisor_sentry`. Don't propose an old Falco for the gVisor engine.
 - **Install path:** the tarball also has `gvisor-bin/`, which `runsc` runs its sentry from, so unpack all of it. The shim matches Fedora's `/usr/local/bin/containerd.*` rule and is labelled `container_runtime_exec_t`. Tested with no AVC denials.
+
+## Kata
+
+- **Install:** use the upstream `kata-static` release, not Fedora's `kata-containers` package. Fedora's package builds the guest from the host kernel with dracut. On Fedora 44 it needed `dbus-daemon`, left `libseccomp` out of the guest (so `kata-agent` exited 127 and the VM powered off, which shows up as "timed out connecting to vsock"), and its builder unit is `WantedBy=kubelet.service`, which K3s doesn't have. Even with those fixed, sandboxes stalled at `update_interface`. The release has no checksum file, so `addon_kata_sha256` comes from GitHub's asset digest.
+- **Runtime:** it's the release's Rust shim, `/opt/kata/runtime-rs/bin/containerd-shim-kata-v2`, with the release's default QEMU config. K3s doesn't detect Kata, so the role adds a `config-v3.toml.d` drop-in, as `addon_gvisor` does. Don't set `pod_annotations` on it: pods would then be able to change hypervisor settings.
+- **SELinux:** QEMU and virtiofsd run as `container_kvm_t` with per-pod MCS categories, with no relabelling or policy module. The one AVC, `io_uring` `{ create }` from QEMU, isn't fatal. Kata is the sandbox option that keeps SELinux confinement, unlike gVisor's `runsc-strip-selinux`.
+- **KVM:** node-2, node-3 and node-4 have VT-x. node-1 (Ryzen 3600) has SVM off in the BIOS: there's no `svm` flag, and `modprobe kvm_amd` returns "Operation not supported". The role fails there with a message. Because of `serial: 1`, that failure also stops the play for any host after it in the run.
+- **Scheduling:** the RuntimeClass has a `katacontainers.io/kata-runtime=true` node selector and a pod overhead of `250m`/`160Mi`. Each VM gets 1 vCPU and 2 GiB of guest memory by default.
+- **Falco:** starting a Kata pod raises no Falco alerts. No escape rule covers Kata yet.
 
 ## Conventions
 
